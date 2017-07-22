@@ -70,6 +70,16 @@ You can also spawn multiple EventMachine processes using [Einhorn]:
 $ einhorn -n COUNT -b 127.0.0.1:3000 ruby app.rb --einhorn
 ```
 
+By default `Goliath::RackProxy` will use a non-rewindable Rack input, so if you
+need the functionality of rewinding the Rack input, you can enable it:
+
+```rb
+class MyGoliathApp < Goliath::RackProxy
+  rack_app MyRackApp
+  rewindable_input true
+end
+```
+
 ## License
 
 The gem is available as open source under the terms of the [MIT License](http://opensource.org/licenses/MIT).
