@@ -23,7 +23,7 @@ more meant to be used standalone than in tandem with another Rack app.
 
 So I created a `Goliath::API` subclass that proxies incoming requests to the
 specified Rack app in a streaming fashion, making it act like a web server for
-your app.
+the app.
 
 ## Installation
 
