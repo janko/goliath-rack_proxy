@@ -59,12 +59,12 @@ module Goliath
 
       # spawn a thread for the request
       EM.defer do
-        result = make_request(rack_app, env)
+        rack_response = make_request(rack_app, env)
 
         # wait for client to stop sending data before sending the response
         env["goliath.request"].callback do
           # spawn a thread for the response
-          EM.defer { send_response(result, env) }
+          EM.defer { send_response(rack_response, env) }
         end
       end
     end
@@ -80,21 +80,22 @@ module Goliath
       log_exception(exception, env)
 
       # return a generic error message on production, or a more detailed one otherwise
-      body    = Goliath.env?(:production) ? ["An error happened"] : [exception.inspect]
-      headers = {"Content-Length" => message.bytesize.to_s}
-      env["goliath.request"].callback { send_response([500, headers, body], env) }
+      body    = Goliath.env?(:production) ? ["An error occurred"] : [exception.inspect]
+      headers = {"Content-Length" => body[0].bytesize.to_s}
+
+      [500, headers, body]
     ensure
       # request has finished, so we close the read end of the rack input
       env["rack.input"].close_read
     end
 
     # Streams the response to the client.
-    def send_response(result, env)
+    def send_response(rack_response, env)
       request    = env["goliath.request"]
       connection = request.conn
       response   = request.response
 
-      response.status, response.headers, response.body = result
+      response.status, response.headers, response.body = rack_response
       response.each { |data| connection.send_data(data) }
 
       connection.terminate_request(keep_alive?(env))
@@ -102,7 +103,8 @@ module Goliath
       # log the exception that occurred
       log_exception(exception, env)
 
-      # close the connection prematurely to communicate erroneous behaviour
+      # communicate that sending response failed and close the connection
+      connection.send_data("HTTP/1.1 500 Internal Server Error\r\n\r\n")
       connection.terminate_request(false)
     ensure
       # log the response information
@@ -145,7 +147,7 @@ module Goliath
     # Logs the exception and adds it to the env hash.
     def log_exception(exception, env)
       # mimic how Ruby would display the error
-      stderr = "#{exception.backtrace[0]}: #{exception.message} (#{exception.class})\n"
+      stderr = "#{exception.backtrace[0]}: #{exception.message} (#{exception.class})\n".dup
       exception.backtrace[1..-1].each do |line|
         stderr << "    from #{line}\n"
       end
@@ -171,7 +173,7 @@ module Goliath
         data = @cache.read(length, outbuf) if @cache && !@cache.eof?
 
         loop do
-          remaining_length = length - data.bytesize if length
+          remaining_length = length - data.bytesize if data && length
 
           break if remaining_length == 0
 
@@ -210,7 +212,7 @@ module Goliath
       # exception, which mimics the behaviour of caling #rewind on
       # non-rewindable IOs such as pipes, sockets, and ttys.
       def rewind
-        raise Errno::ESPIPE, "Illegal seek" if @cache.nil?
+        raise Errno::ESPIPE if @cache.nil? # raised by other non-rewindable IOs
         @cache.rewind
       end
 
