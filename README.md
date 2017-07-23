@@ -70,13 +70,15 @@ You can also spawn multiple EventMachine processes using [Einhorn]:
 $ einhorn -n COUNT -b 127.0.0.1:3000 ruby app.rb --einhorn
 ```
 
-By default `Goliath::RackProxy` will use a non-rewindable Rack input, so if you
-need the functionality of rewinding the Rack input, you can enable it:
+By default `Goliath::RackProxy` will use a rewindable `rack.input`, which means
+the data received from the client will be cached onto disk for the duration of
+the request. If you don't need the `rack.input` to be rewindable and want to
+save on disk I/O, you can disable caching:
 
 ```rb
 class MyGoliathApp < Goliath::RackProxy
   rack_app MyRackApp
-  rewindable_input true
+  rewindable_input false
 end
 ```
 

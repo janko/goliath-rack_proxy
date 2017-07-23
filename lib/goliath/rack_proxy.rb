@@ -6,22 +6,25 @@ require "tempfile"
 module Goliath
   class RackProxy < Goliath::API
     # Rack app to proxy the incoming requests to.
-    def self.rack_app(app = nil)
-      @rack_app = app if app != nil
-      @rack_app
+    def self.rack_app(app)
+      rack_proxy_options[:rack_app] = app
     end
 
     # Whether the input should be rewindable, i.e. cached onto disk.
-    def self.rewindable_input(value = nil)
-      @rewindable_input = value if value != nil
-      @rewindable_input
+    def self.rewindable_input(value)
+      rack_proxy_options[:rewindable_input] = value
+    end
+
+    # Custom user-defined options.
+    def self.rack_proxy_options
+      @rack_proxy_options ||= {}
     end
 
     # Called when request headers were parsed.
     def on_headers(env, headers)
       # assign a streaming input that acts as a bidirectional pipe
-      env["rack_proxy.input"] = RackInput.new(rewindable: self.class.rewindable_input)
-      rack_app = self.class.rack_app or fail("Rack application wasn't provided")
+      env["rack_proxy.input"] = RackInput.new(rewindable: self.class.rack_proxy_options.fetch(:rewindable_input, true))
+      rack_app = self.class.rack_proxy_options.fetch(:rack_app)
 
       # start the rack request asynchronously with the created rack input
       async_rack_call rack_app, env.merge("rack.input" => env["rack_proxy.input"])
@@ -160,7 +163,7 @@ module Goliath
     # IO-like object that acts as a bidirectional pipe, which returns the data
     # that has been written to it.
     class RackInput
-      def initialize(rewindable: false)
+      def initialize(rewindable: true)
         @data_queue = Queue.new
         @cache      = Tempfile.new("goliath-rack_input") if rewindable
         @buffer     = nil
