@@ -82,6 +82,20 @@ class MyGoliathApp < Goliath::RackProxy
 end
 ```
 
+If you want to report any exceptions that might occur with the Rack app, you can
+override `Goliath::RackProxy#log_exception`:
+
+```rb
+class MyGoliathApp < Goliath::RackProxy
+  rack_app MyRackApp
+
+  def log_exception(exception, env)
+    super
+    Airbrake.notify(exception)
+  end
+end
+```
+
 ## License
 
 The gem is available as open source under the terms of the [MIT License](http://opensource.org/licenses/MIT).
