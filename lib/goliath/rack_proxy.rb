@@ -76,7 +76,7 @@ module Goliath
       # call the rack app with some patches
       rack_app.call env.merge(
         "rack.url_scheme" => env["options"][:ssl] ? "https" : "http", # https://github.com/postrank-labs/goliath/issues/210
-        "async.callback " => nil, # prevent Roda/Sinatra from calling EventMachine while streaming the response
+        "async.callback"  => nil, # prevent Roda/Sinatra from calling EventMachine while streaming the response
       )
     rescue Exception => exception
       # log the exception that occurred

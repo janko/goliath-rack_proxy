@@ -140,6 +140,38 @@ describe "Goliath::RackProxy" do
     assert_in_delta second_chunk_time, Time.now, 0.2
   end
 
+  it "closes the response body at correct time" do
+    stdout_pipe = start_server <<~RUBY
+      require "goliath/rack_proxy"
+      require "stringio"
+
+      class App < Goliath::RackProxy
+        rack_app -> (env) {
+          tempfile = Tempfile.new
+          tempfile << "a" * 10*1024*1024
+          tempfile.open
+
+          chunks = Enumerator.new do |y|
+            if env["async.callback"] # this is what Roda and Sinatra essentially do
+              EM.defer { y << tempfile.read(16*1024) until tempfile.eof? }
+            else
+              y << tempfile.read(16*1024) until tempfile.eof?
+            end
+          end
+
+          body = Rack::BodyProxy.new(chunks) { tempfile.close! }
+
+          [200, {"Content-Length" => tempfile.size.to_s}, body]
+        }
+      end
+    RUBY
+
+    response = HTTP.get("http://localhost:9000")
+
+    assert_equal "a" * 10*1024*1024, response.body.to_s
+    assert_equal response.body.to_s.bytesize.to_s, response.headers["Content-Length"]
+  end
+
   it "accepts parallel requests" do
     start_server <<~RUBY
       require "goliath/rack_proxy"
