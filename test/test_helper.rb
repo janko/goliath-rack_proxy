@@ -9,21 +9,26 @@ require "open3"
 require "tempfile"
 require "http"
 
-def start_server(ruby, args = [])
-  tempfile = Tempfile.new
-  tempfile << ruby
-  tempfile.open
+class Minitest::Test
+  def start_server(ruby, args = [])
+    tempfile = Tempfile.new
+    tempfile << ruby
+    tempfile.open
 
-  command = %W[bundle exec ruby #{tempfile.path} --stdout] + args
+    command = %W[bundle exec ruby #{tempfile.path} --stdout] + args
 
-  _, stdout_pipe, _, $thread = Open3.popen3(*command)
+    _, stdout_pipe, _, $thread = Open3.popen3(*command)
 
-  HTTP.get("http://localhost:9000") rescue retry
+    HTTP.get("http://localhost:9000") rescue retry
 
-  stdout_pipe
-end
+    stdout_pipe
+  end
 
-def stop_server
-  Process.kill "TERM", $thread[:pid] if $thread
-  $thread = nil
+  def stop_server
+    if $thread
+      Process.kill "TERM", $thread[:pid]
+      $thread.join # wait for subprocess to finish
+      $thread = nil
+    end
+  end
 end
