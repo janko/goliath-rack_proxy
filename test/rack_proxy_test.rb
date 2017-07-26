@@ -1,8 +1,15 @@
 require "test_helper"
 require "http"
 require "time"
+require "timeout"
 
 describe "Goliath::RackProxy" do
+  around do |&block|
+    Timeout.timeout(10) do
+      super(&block)
+    end
+  end
+
   after do
     stop_server
   end

@@ -4,10 +4,12 @@ ENV["MT_NO_EXPECTATIONS"] = "1"
 
 require "minitest/autorun"
 require "minitest/pride"
+require "minitest/hooks/default"
+
+require "http"
 
 require "open3"
 require "tempfile"
-require "http"
 
 class Minitest::Test
   def start_server(ruby, args = [])
