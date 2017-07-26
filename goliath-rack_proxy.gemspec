@@ -1,6 +1,6 @@
 Gem::Specification.new do |gem|
   gem.name         = "goliath-rack_proxy"
-  gem.version      = "0.1.1"
+  gem.version      = "0.1.2"
 
   gem.required_ruby_version = ">= 2.1"
 
