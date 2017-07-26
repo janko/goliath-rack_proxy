@@ -89,7 +89,7 @@ module Goliath
       [500, headers, body]
     ensure
       # request has finished, so we close the read end of the rack input
-      EM.next_tick { env["rack.input"].close_read }
+      env["rack.input"].close_read
     end
 
     # Streams the response to the client.
@@ -209,6 +209,7 @@ module Goliath
       # Pushes data to the queue, which is then popped in #read.
       def write(data)
         @data_queue.push(data) unless @data_queue.closed?
+      rescue ClosedQueueError
       end
 
       # Rewinds the cache IO if it's configured, otherwise raises Errno::ESPIPE
