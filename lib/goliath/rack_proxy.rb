@@ -89,7 +89,7 @@ module Goliath
       [500, headers, body]
     ensure
       # request has finished, so we close the read end of the rack input
-      env["rack.input"].close_read
+      EM.next_tick { env["rack.input"].close_read }
     end
 
     # Streams the response to the client.
