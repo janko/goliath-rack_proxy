@@ -55,9 +55,8 @@ module Goliath
           rack_input = RackInput.new(rewindable: rewindable_input) { Fiber.yield }
 
           result = app.call env.merge(
-            "rack.input"      => rack_input,
-            "rack.url_scheme" => env["options"][:ssl] ? "https" : "http", # https://github.com/postrank-labs/goliath/issues/210
-            "async.callback"  => nil, # prevent Roda/Sinatra from calling EventMachine while streaming the response
+            "rack.input"     => rack_input,
+            "async.callback" => nil, # prevent Roda/Sinatra from calling EventMachine while streaming the response
           )
 
           rack_input.close
