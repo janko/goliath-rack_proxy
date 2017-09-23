@@ -14,7 +14,7 @@ Gem::Specification.new do |gem|
   gem.files        = Dir["README.md", "LICENSE.txt", "lib/**/*.rb", "*.gemspec"]
   gem.require_path = "lib"
 
-  gem.add_dependency "goliath", ">= 1.0.5", "< 2"
+  gem.add_dependency "goliath", ">= 1.0.6", "< 2"
 
   gem.add_development_dependency "rake", "~> 11.1"
   gem.add_development_dependency "minitest", "~> 5.8"

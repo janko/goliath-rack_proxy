@@ -19,6 +19,7 @@ describe "Goliath::RackProxy" do
       require "goliath/rack_proxy"
 
       class App < Goliath::RackProxy
+        use Rack::Head
         rack_app -> (env) { [200, {"Content-Length" => "5"}, ["Hello"]] }
       end
     RUBY
@@ -36,6 +37,7 @@ describe "Goliath::RackProxy" do
       require "goliath/rack_proxy"
 
       class App < Goliath::RackProxy
+        use Rack::Head
         rack_app -> (env) {
           start_time = Time.now
           content = env["rack.input"].read
@@ -59,6 +61,7 @@ describe "Goliath::RackProxy" do
       require "goliath/rack_proxy"
 
       class App < Goliath::RackProxy
+        use Rack::Head
         rack_app -> (env) do
           body = []
           body << env["rack.input"].read(3)
@@ -83,6 +86,7 @@ describe "Goliath::RackProxy" do
       require "goliath/rack_proxy"
 
       class App < Goliath::RackProxy
+        use Rack::Head
         rack_app -> (env) do
           env["rack.input"].read
           env["rack.input"].rewind
@@ -103,6 +107,7 @@ describe "Goliath::RackProxy" do
       require "goliath/rack_proxy"
 
       class App < Goliath::RackProxy
+        use Rack::Head
         rack_app -> (env) { env["rack.input"].rewind }
         rewindable_input false
       end
@@ -112,7 +117,7 @@ describe "Goliath::RackProxy" do
       .headers("Transfer-Encoding" => "chunked")
       .post("http://localhost:9000", body: ["foo", "bar", "baz"])
 
-    assert_equal "#<Errno::ESPIPE: Illegal seek>", response.body.to_s
+    assert_equal "Illegal seek", response.body.to_s
   end
 
   it "implements streaming downloads" do
@@ -120,9 +125,10 @@ describe "Goliath::RackProxy" do
       require "goliath/rack_proxy"
 
       class App < Goliath::RackProxy
+        use Rack::Head
         rack_app -> (env) {
-          body = Enumerator.new { |y| sleep 0.5; y << "foo"; sleep 0.5; y << "bar" }
-          [200, {"Content-Length" => "6"}, body]
+          body = Enumerator.new { |y| sleep 0.5; y << "a"*16*1024; sleep 0.5; y << "b"*16*1024 }
+          [200, {"Content-Length" => (32*1024).to_s}, body]
         }
       end
     RUBY
@@ -132,14 +138,14 @@ describe "Goliath::RackProxy" do
     response = HTTP.get("http://localhost:9000")
 
     header_time = Time.now
-    assert_equal "6", response.headers["Content-Length"]
+    assert_equal (32*1024).to_s, response.headers["Content-Length"]
     assert_in_delta start_time, header_time, 0.2
 
-    assert_equal "foo", response.body.readpartial
+    assert_equal "a"*16*1024, response.body.readpartial
     first_chunk_time = Time.now
     assert_in_delta header_time + 0.5, first_chunk_time, 0.2
 
-    assert_equal "bar", response.body.readpartial
+    assert_equal "b"*16*1024, response.body.readpartial
     second_chunk_time = Time.now
     assert_in_delta first_chunk_time + 0.5, second_chunk_time, 0.2
 
@@ -147,69 +153,7 @@ describe "Goliath::RackProxy" do
     assert_in_delta second_chunk_time, Time.now, 0.2
   end
 
-  it "closes the response body at correct time" do
-    stdout_pipe = start_server <<~RUBY
-      require "goliath/rack_proxy"
-      require "stringio"
-
-      class App < Goliath::RackProxy
-        rack_app -> (env) {
-          tempfile = Tempfile.new
-          tempfile << "a" * 10*1024*1024
-          tempfile.open
-
-          chunks = Enumerator.new do |y|
-            if env["async.callback"] # this is what Roda and Sinatra essentially do
-              EM.defer { y << tempfile.read(16*1024) until tempfile.eof? }
-            else
-              y << tempfile.read(16*1024) until tempfile.eof?
-            end
-          end
-
-          body = Rack::BodyProxy.new(chunks) { tempfile.close! }
-
-          [200, {"Content-Length" => tempfile.size.to_s}, body]
-        }
-      end
-    RUBY
-
-    response = HTTP.get("http://localhost:9000")
-
-    assert_equal "a" * 10*1024*1024, response.body.to_s
-    assert_equal response.body.to_s.bytesize.to_s, response.headers["Content-Length"]
-  end
-
-  it "accepts parallel requests" do
-    start_server <<~RUBY
-      require "goliath/rack_proxy"
-
-      class App < Goliath::RackProxy
-        rack_app -> (env) {
-          env["rack.input"].read
-          body = Enumerator.new { |y| sleep 0.5; y << "foo"; sleep 0.5; y << "bar" }
-          [200, {"Content-Length" => "6"}, body]
-        }
-      end
-    RUBY
-
-    start_time = Time.now
-
-    5.times.map do
-      Thread.new do
-        body = Enumerator.new { |y| sleep 0.5; y << "foo"; sleep 0.5; y << "bar" }
-
-        response = HTTP
-          .headers("Transfer-Encoding" => "chunked")
-          .post("http://localhost:9000", body: body)
-
-        assert_equal "foobar", response.body.to_s
-      end
-    end.each(&:join)
-
-    assert_in_delta start_time + 2, Time.now, 0.1
-  end
-
-  it "starts sending the response only after client has sent all data" do
+  it "doesn't break when sent request body isn't read by the rack app" do
     start_server <<~RUBY
       require "goliath/rack_proxy"
 
@@ -227,89 +171,29 @@ describe "Goliath::RackProxy" do
     assert_equal "content", response.body.to_s
   end
 
-  it "catches exceptions when calling the Rack application" do
-    stdout_pipe = start_server <<~RUBY
-      require "goliath/rack_proxy"
-
-      class App < Goliath::RackProxy
-        rack_app -> (env) { 10 / 0 }
-      end
-    RUBY
-
-    response = HTTP.get("http://localhost:9000")
-
-    assert_equal "#<ZeroDivisionError: divided by 0>", response.body.to_s
-    assert_equal response.body.to_s.bytesize.to_s, response.headers["Content-Length"]
-    assert_includes stdout_pipe.readpartial(16*1024), "divided by 0 (ZeroDivisionError)"
-  end
-
-  it "doesn't display exceptions on production" do
-    stdout_pipe = start_server <<~RUBY, ["--environment", "production"]
-      require "goliath/rack_proxy"
-
-      class App < Goliath::RackProxy
-        rack_app -> (env) { 10 / 0 }
-      end
-    RUBY
-
-    response = HTTP.get("http://localhost:9000")
-
-    assert_equal "An error occurred", response.body.to_s
-    assert_equal response.body.to_s.bytesize.to_s, response.headers["Content-Length"]
-    assert_includes stdout_pipe.readpartial(16*1024), "divided by 0 (ZeroDivisionError)"
-  end
-
-  it "handles keep-alive connections" do
+  it "prevents Sinatra from calling EM.defer when streaming the response" do
     start_server <<~RUBY
       require "goliath/rack_proxy"
 
       class App < Goliath::RackProxy
-        rack_app -> (env) { [200, {"Content-Length" => "7"}, ["content"]] }
-      end
-    RUBY
-
-    client = HTTP.persistent("http://localhost:9000")
-
-    assert_equal "content", client.get("/").to_s
-    assert_equal "content", client.get("/").to_s
-
-    client = HTTP::Client.new
-
-    assert_equal "content", client.get("http://localhost:9000").to_s
-    assert_equal "content", client.get("http://localhost:9000").to_s
-  end
-
-  it "catches exceptions that occurred during sending the response" do
-    stdout_pipe = start_server <<~RUBY
-      require "goliath/rack_proxy"
-
-      class App < Goliath::RackProxy
+        use Rack::Head
         rack_app -> (env) {
-          [200, {"Content-Length" => "100"}, Enumerator.new { |y| 10 / 0 }]
+          body = Enumerator.new do |y|
+            if env["async.callback"]
+              EM.defer { y << "foo" } # this is what Sinatra essential does
+            else
+              y << "foo"
+            end
+          end
+
+          [200, {"Content-Length" => "3"}, body]
         }
       end
     RUBY
 
     response = HTTP.get("http://localhost:9000")
 
-    assert_equal "HTTP/1.1 500 Internal Server Error\r\n\r\n", response.body.to_s # read the whole response
-    assert_includes stdout_pipe.readpartial(16*1024), "divided by 0 (ZeroDivisionError)"
-  end
-
-  # https://github.com/postrank-labs/goliath/issues/210
-  it "allows generating full URLs" do
-    start_server <<~RUBY
-      require "goliath/rack_proxy"
-
-      class App < Goliath::RackProxy
-        rack_app -> (env) { [200, {}, [Rack::Request.new(env).url]] }
-      end
-    RUBY
-
-    body = Enumerator.new { |y| sleep 0.5; y << "foo"; sleep 0.5; y << "bar" }
-
-    response = HTTP.get("http://localhost:9000/foo")
-
-    assert_equal "http://localhost:9000/foo", response.body.to_s
+    assert_equal "foo", response.body.to_s
+    assert_equal "3",   response.headers["Content-Length"]
   end
 end

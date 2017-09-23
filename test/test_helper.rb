@@ -19,18 +19,20 @@ class Minitest::Test
 
     command = %W[bundle exec ruby #{tempfile.path} --stdout] + args
 
-    _, stdout_pipe, _, $thread = Open3.popen3(*command)
+    stdin, stdout, stderr, @thread = Open3.popen3(*command)
 
-    HTTP.get("http://localhost:9000") rescue retry
+    HTTP.head("http://localhost:9000") rescue retry
 
-    stdout_pipe
+    Thread.new { IO.copy_stream(stderr, $stderr) }
+
+    stdout
   end
 
   def stop_server
-    if $thread
-      Process.kill "TERM", $thread[:pid]
-      $thread.join # wait for subprocess to finish
-      $thread = nil
+    if @thread
+      Process.kill "TERM", @thread[:pid]
+      @thread.join # wait for subprocess to finish
+      @thread = nil
     end
   end
 end
