@@ -19,7 +19,7 @@ which isn't the most efficent use of server resources. It's also difficult to
 estimate how many workers you need, because once you disable request buffering
 in the application server, you become vulnerable to slow clients.
 
-Then I found [Goliath], which I gave me the control I needed for handling
+Then I came across [Goliath], which gave me the control I needed for handling
 requests. It's built on top of [EventMachine], which uses the reactor pattern
 to schedule work efficiently. The most important feature is that long-running
 requests won't impact request throughput, as there are no web workers that are
