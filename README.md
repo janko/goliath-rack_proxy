@@ -9,21 +9,27 @@ uploads and large downloads, I wanted to find an appropriate web server to
 recommend. I needed a web server that supports **streaming uploads**, allowing
 the Rack application to start processing the request while the request body is
 still being received, and that way giving it the ability to save whatever data
-it received before possible request interruptions. I also needed support for
-**streaming downloads**, sending response body in chunks back to the client.
+it received before possible potential request interruption. I also needed
+support for **streaming downloads**, sending response body in chunks back to
+the client.
 
 The only web server I found that supported all of this was [Unicorn]. However,
 Unicorn needs to spawn a whole process for serving each concurrent request,
-which isn't the most efficent use of server resources.
+which isn't the most efficent use of server resources. It's also difficult to
+estimate how many workers you need, because once you disable request buffering
+in the application server, you become vulnerable to slow clients.
 
-Then I found [Goliath], which I found to provide the most flexibility in
-handling requests. It's built on top of [EventMachine], so it uses threads for
-serving requests, but it can also be run in hybrid mode. However, Goliath is
-more meant to be used standalone than in tandem with another Rack app.
+Then I found [Goliath], which I gave me the control I needed for handling
+requests. It's built on top of [EventMachine], which uses the reactor pattern
+to schedule work efficiently. The most important feature is that long-running
+requests won't impact request throughput, as there are no web workers that are
+waiting for incoming data.
 
-So I created a `Goliath::API` subclass that proxies incoming requests to the
-specified Rack app in a streaming fashion, making it act like a web server for
-the app.
+However, Goliath itself is designed to be used standalone, not in tandem with
+another Rack app. So I created `Goliath::RackProxy`, which is a `Goliath::API`
+subclass that proxies incoming/outgoing requests/responses to/from the
+specified Rack app in a streaming fashion, essentially making it act like a web
+server for the Rack app.
 
 ## Installation
 
