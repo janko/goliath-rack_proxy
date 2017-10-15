@@ -57,14 +57,7 @@ Goliath server (see [list of available options][goliath server options]):
 $ ruby app.rb --port 3000 --stdout
 ```
 
-This will run a single EventMachine process, which by default uses a pool of
-20 threads. You can increase the number of threads EventMachine uses:
-
-```rb
-EventMachine.threadpool_size = 100
-```
-
-You can also spawn multiple EventMachine processes using [Einhorn]:
+You can scale Goliath applications into multiple processes using [Einhorn]:
 
 ```sh
 $ einhorn -n COUNT -b 127.0.0.1:3000 ruby app.rb --einhorn
