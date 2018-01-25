@@ -76,7 +76,7 @@ module Goliath
     class RackInput
       def initialize(rewindable: true, &next_chunk)
         @next_chunk = next_chunk
-        @cache      = Tempfile.new("goliath-rack_input") if rewindable
+        @cache      = Tempfile.new("goliath-rack_input", binmode: true) if rewindable
         @buffer     = nil
         @eof        = false
       end
