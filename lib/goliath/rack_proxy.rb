@@ -11,7 +11,7 @@ module Goliath
       rack_proxy_options[:rack_app] = app
     end
 
-    # Whether the input should be rewindable, i.e. cached onto disk.
+    # Whether the request body should be rewindable.
     def self.rewindable_input(value)
       rack_proxy_options[:rewindable_input] = value
     end
@@ -21,7 +21,7 @@ module Goliath
       @rack_proxy_options ||= {}
     end
 
-    # Called when request headers were parsed.
+    # Starts the request to the given Rack application.
     def on_headers(env, headers)
       rack_app         = self.class.rack_proxy_options.fetch(:rack_app)
       rewindable_input = self.class.rack_proxy_options.fetch(:rewindable_input, true)
@@ -30,31 +30,48 @@ module Goliath
       env["rack_proxy.call"].resume
     end
 
-    # Called on each request body chunk received from the client.
+    # Resumes the Rack request with the received request body data.
     def on_body(env, data)
-      # write data to the input, which will be read by the Rack app
       env["rack_proxy.call"].resume(data)
     end
 
-    # Called at the end of the request (after #response) or on client disconnect.
+    # Resumes the Rack request with no more data.
     def on_close(env)
-      # reading the request body has finished, so we close write end of the input
       env["rack_proxy.call"].resume
     end
 
-    # Called after all the data has been received from the client.
+    # Resumes the Rack request with no more data.
     def response(env)
       env["rack_proxy.call"].resume
     end
 
     private
 
+    # Allows "curry-calling" the Rack application, resuming the call as we're
+    # receiving more request body data.
     class RackCall
       def initialize(app, env, rewindable_input: true)
-        @fiber = Fiber.new do
-          rack_input = RackInput.new(rewindable: rewindable_input) { Fiber.yield }
+        @app              = app
+        @env              = env
+        @rewindable_input = rewindable_input
+      end
 
-          result = app.call env.merge(
+      def resume(data = nil)
+        @result = fiber.resume(data) if fiber.alive?
+        @result
+      end
+
+      private
+
+      # Calls the Rack application inside a Fiber, using the RackInput object as
+      # the request body. When the Rack application wants to read request body
+      # data that hasn't been received yet, the execution is automatically
+      # paused so that the event loop can go on.
+      def fiber
+        @fiber ||= Fiber.new do
+          rack_input = RackInput.new(rewindable: @rewindable_input) { Fiber.yield }
+
+          result = @app.call @env.merge(
             "rack.input"     => rack_input,
             "async.callback" => nil, # prevent Roda/Sinatra from calling EventMachine while streaming the response
           )
@@ -64,15 +81,12 @@ module Goliath
           result
         end
       end
-
-      def resume(data = nil)
-        @result = @fiber.resume(data) if @fiber.alive?
-        @result
-      end
     end
 
-    # IO-like object that acts as a bidirectional pipe, which returns the data
-    # that has been written to it.
+    # IO-like object that conforms to the Rack specification for the request
+    # body ("rack input"). It takes a block which produces chunks of data, and
+    # makes this data retrievable through the IO#read interface. When rewindable
+    # caches the retrieved content onto disk.
     class RackInput
       def initialize(rewindable: true, &next_chunk)
         @next_chunk = next_chunk
@@ -81,8 +95,9 @@ module Goliath
         @eof        = false
       end
 
-      # Pops chunks of data from the queue and implements
-      # `IO#read(length = nil, outbuf = nil)` semantics.
+      # Retrieves data using the IO#read semantics. If rack input is declared
+      # rewindable, writes retrieved content into a Tempfile object so that
+      # it can later be re-read.
       def read(length = nil, outbuf = nil)
         data = outbuf.clear if outbuf
         data = @cache.read(length, outbuf) if @cache && !@cache.eof?
@@ -118,15 +133,15 @@ module Goliath
         data.to_s unless length && (data.nil? || data.empty?)
       end
 
-      # Rewinds the cache IO if it's configured, otherwise raises Errno::ESPIPE
-      # exception, which mimics the behaviour of caling #rewind on
-      # non-rewindable IOs such as pipes, sockets, and ttys.
+      # Rewinds the tempfile if rewindable. Otherwise raises Errno::ESPIPE
+      # exception, which is what other non-rewindable Ruby IO objects raise.
       def rewind
-        raise Errno::ESPIPE if @cache.nil? # raised by other non-rewindable IOs
+        raise Errno::ESPIPE if @cache.nil?
         @cache.rewind
       end
 
-      # Conforming to the Rack specification.
+      # Deletes the tempfile. The #close method is also part of the Rack
+      # specification.
       def close
         @cache.close! if @cache
       end
