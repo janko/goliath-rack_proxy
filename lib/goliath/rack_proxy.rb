@@ -128,6 +128,8 @@ module Goliath
           else
             @buffer = nil
           end
+
+          buffered_data.clear unless data.equal?(buffered_data)
         end
 
         data.to_s unless length && (data.nil? || data.empty?)
