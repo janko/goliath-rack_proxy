@@ -46,13 +46,13 @@ describe "Goliath::RackProxy" do
       end
     RUBY
 
-    body = Enumerator.new { |y| sleep 1; y << "body" }
+    body = Enumerator.new { |y| y << "foo"; sleep 1; y << "bar"  }
 
     response = HTTP
       .headers("Transfer-Encoding" => "chunked")
       .post("http://localhost:9000", body: body)
 
-    assert_equal "body", response.body.to_s
+    assert_equal "foobar", response.body.to_s
     assert_in_delta 1, Float(response.headers["Read-Time"]), 0.1
   end
 
