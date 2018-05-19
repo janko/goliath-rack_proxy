@@ -19,6 +19,6 @@ Gem::Specification.new do |gem|
   gem.add_development_dependency "rake", "~> 11.1"
   gem.add_development_dependency "minitest", "~> 5.8"
   gem.add_development_dependency "minitest-hooks"
-  gem.add_development_dependency "http"
+  gem.add_development_dependency "http", "~> 3.0"
   gem.add_development_dependency "rack", "~> 2.0"
 end
