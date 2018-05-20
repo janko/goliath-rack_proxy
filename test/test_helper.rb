@@ -21,7 +21,7 @@ class Minitest::Test
 
     stdin, stdout, stderr, @thread = Open3.popen3(*command)
 
-    HTTP.head("http://localhost:9000") rescue retry
+    HTTP.get("http://localhost:9000").to_s rescue retry
 
     Thread.new { IO.copy_stream(stderr, $stderr) }
 

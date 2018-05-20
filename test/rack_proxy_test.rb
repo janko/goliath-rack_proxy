@@ -19,7 +19,6 @@ describe "Goliath::RackProxy" do
       require "goliath/rack_proxy"
 
       class App < Goliath::RackProxy
-        use Rack::Head
         rack_app -> (env) { [200, {"Content-Length" => "5"}, ["Hello"]] }
       end
     RUBY
@@ -37,7 +36,6 @@ describe "Goliath::RackProxy" do
       require "goliath/rack_proxy"
 
       class App < Goliath::RackProxy
-        use Rack::Head
         rack_app -> (env) {
           start_time = Time.now
           content = env["rack.input"].read
@@ -61,7 +59,6 @@ describe "Goliath::RackProxy" do
       require "goliath/rack_proxy"
 
       class App < Goliath::RackProxy
-        use Rack::Head
         rack_app -> (env) do
           body = []
           body << env["rack.input"].read(3)
@@ -86,7 +83,6 @@ describe "Goliath::RackProxy" do
       require "goliath/rack_proxy"
 
       class App < Goliath::RackProxy
-        use Rack::Head
         rack_app -> (env) do
           env["rack.input"].read
           env["rack.input"].rewind
@@ -107,7 +103,6 @@ describe "Goliath::RackProxy" do
       require "goliath/rack_proxy"
 
       class App < Goliath::RackProxy
-        use Rack::Head
         rack_app -> (env) { env["rack.input"].rewind }
         rewindable_input false
       end
@@ -125,7 +120,6 @@ describe "Goliath::RackProxy" do
       require "goliath/rack_proxy"
 
       class App < Goliath::RackProxy
-        use Rack::Head
         rack_app -> (env) {
           body = Enumerator.new { |y| sleep 0.5; y << "a"*16*1024; sleep 0.5; y << "b"*16*1024 }
           [200, {"Content-Length" => (32*1024).to_s}, body]
@@ -176,7 +170,6 @@ describe "Goliath::RackProxy" do
       require "goliath/rack_proxy"
 
       class App < Goliath::RackProxy
-        use Rack::Head
         rack_app -> (env) {
           body = Enumerator.new do |y|
             if env["async.callback"]

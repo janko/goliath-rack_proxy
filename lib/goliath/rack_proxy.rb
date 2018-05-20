@@ -27,12 +27,12 @@ module Goliath
       rewindable_input = self.class.rack_proxy_options.fetch(:rewindable_input, true)
 
       env["rack_proxy.call"] = RackCall.new(rack_app, env, rewindable_input: rewindable_input)
-      env["rack_proxy.call"].resume
+      env["rack_proxy.call"].resume(on_response: env[ASYNC_CALLBACK])
     end
 
     # Resumes the Rack request with the received request body data.
     def on_body(env, data)
-      env["rack_proxy.call"].resume(data)
+      env["rack_proxy.call"].resume(data, on_response: env[ASYNC_CALLBACK])
     end
 
     # Resumes the Rack request with no more data.
@@ -42,7 +42,8 @@ module Goliath
 
     # Resumes the Rack request with no more data.
     def response(env)
-      env["rack_proxy.call"].resume
+      env["rack_proxy.call"].resume(on_response: env[ASYNC_CALLBACK])
+      nil
     end
 
     private
@@ -56,9 +57,11 @@ module Goliath
         @rewindable_input = rewindable_input
       end
 
-      def resume(data = nil)
-        @result = fiber.resume(data) if fiber.alive?
-        @result
+      def resume(data = nil, on_response: nil)
+        if fiber.alive?
+          response = fiber.resume(data)
+          on_response.call(response) if response && on_response
+        end
       end
 
       private
@@ -71,14 +74,14 @@ module Goliath
         @fiber ||= Fiber.new do
           rack_input = RackInput.new(rewindable: @rewindable_input) { Fiber.yield }
 
-          result = @app.call @env.merge(
+          response = @app.call @env.merge(
             "rack.input"     => rack_input,
             "async.callback" => nil, # prevent Roda/Sinatra from calling EventMachine while streaming the response
           )
 
           rack_input.close
 
-          result
+          response
         end
       end
     end
