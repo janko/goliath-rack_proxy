@@ -27,12 +27,12 @@ module Goliath
       rewindable_input = self.class.rack_proxy_options.fetch(:rewindable_input, true)
 
       env["rack_proxy.call"] = RackCall.new(rack_app, env, rewindable_input: rewindable_input)
-      env["rack_proxy.call"].resume(on_response: env[ASYNC_CALLBACK])
+      env["rack_proxy.call"].resume(on_response: -> (response) { send_response(response, env) })
     end
 
     # Resumes the Rack request with the received request body data.
     def on_body(env, data)
-      env["rack_proxy.call"].resume(data, on_response: env[ASYNC_CALLBACK])
+      env["rack_proxy.call"].resume(data, on_response: -> (response) { send_response(response, env) })
     end
 
     # Resumes the Rack request with no more data.
@@ -42,11 +42,29 @@ module Goliath
 
     # Resumes the Rack request with no more data.
     def response(env)
-      env["rack_proxy.call"].resume(on_response: env[ASYNC_CALLBACK])
+      env["rack_proxy.call"].resume(on_response: -> (response) { send_response(response, env) })
       nil
     end
 
     private
+
+    # The env[ASYNC_CALLBACK] proc wraps sending response data in a
+    # Goliath::Request#callback, which gets executed after the whole request
+    # body has been received.
+    #
+    # This is not ideal for apps that receive large uploads, as when they
+    # validate request headers, they likely want to return error responses
+    # immediately. It's not good user experience to require the user to upload
+    # a large file, only to have the request fail with a validation error.
+    #
+    # To work around that, we mark the request as succeeded before sending the
+    # response, so that the response is sent immediately.
+    def send_response(response, env)
+      request = env[STREAM_SEND].binding.receiver # hack to get the Goliath::Request object
+      request.succeed # makes it so that response is sent immediately
+
+      env[ASYNC_CALLBACK].call(response)
+    end
 
     # Allows "curry-calling" the Rack application, resuming the call as we're
     # receiving more request body data.
