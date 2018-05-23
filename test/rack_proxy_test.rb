@@ -158,7 +158,7 @@ describe "Goliath::RackProxy" do
       require "goliath/rack_proxy"
 
       class App < Goliath::RackProxy
-        rack_app -> (env) { [200, {}, ["content"]] }
+        rack_app -> (env) { [200, {"Content-Length" => "7"}, ["content"]] }
       end
     RUBY
 
