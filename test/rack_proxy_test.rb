@@ -64,9 +64,9 @@ describe "Goliath::RackProxy" do
           body << env["rack.input"].read(3)
           body << env["rack.input"].read(2, "")
           body << env["rack.input"].read
-          body << env["rack.input"].read(3).inspect
+          body << env["rack.input"].read(3)
 
-          [200, {}, body]
+          [200, {}, body.map(&:inspect)]
         end
       end
     RUBY
@@ -75,7 +75,7 @@ describe "Goliath::RackProxy" do
       .headers("Transfer-Encoding" => "chunked")
       .post("http://localhost:9000", body: ["he", "llo", " ", "world"])
 
-    assert_equal "hello worldnil", response.body.to_s
+    assert_equal '"hel""lo"" world"nil', response.body.to_s
   end
 
   it "can rewind rewindable inputs" do
@@ -103,7 +103,13 @@ describe "Goliath::RackProxy" do
       require "goliath/rack_proxy"
 
       class App < Goliath::RackProxy
-        rack_app -> (env) { env["rack.input"].rewind }
+        rack_app -> (env) {
+          begin
+            env["rack.input"].rewind
+          rescue Errno::ESPIPE => exception
+            [200, {}, [exception.inspect]]
+          end
+        }
         rewindable_input false
       end
     RUBY
@@ -112,7 +118,7 @@ describe "Goliath::RackProxy" do
       .headers("Transfer-Encoding" => "chunked")
       .post("http://localhost:9000", body: ["foo", "bar", "baz"])
 
-    assert_equal "Illegal seek", response.body.to_s
+    assert_equal "#<Errno::ESPIPE: Illegal seek>", response.body.to_s
   end
 
   it "implements streaming downloads" do
