@@ -130,11 +130,13 @@ module Goliath
 
           @buffer = next_chunk or break if @buffer.nil?
 
-          buffered_data = if remaining_length && remaining_length < @buffer.bytesize
-                            @buffer.byteslice(0, remaining_length)
-                          else
-                            @buffer
-                          end
+          if remaining_length && remaining_length < @buffer.bytesize
+            buffered_data = @buffer.byteslice(0, remaining_length)
+            @buffer       = @buffer.byteslice(remaining_length..-1)
+          else
+            buffered_data = @buffer
+            @buffer       = nil
+          end
 
           if data
             data << buffered_data
@@ -143,12 +145,6 @@ module Goliath
           end
 
           @cache.write(buffered_data) if @cache
-
-          if buffered_data.bytesize < @buffer.bytesize
-            @buffer = @buffer.byteslice(buffered_data.bytesize..-1)
-          else
-            @buffer = nil
-          end
 
           buffered_data.clear unless data.equal?(buffered_data)
         end
