@@ -1,6 +1,14 @@
 # Goliath::RackProxy
 
-Allows you to use [Goliath] as a web server for your Rack app, giving you streaming requests and responses.
+Allows you to use [Goliath] as a web server for your Rack app, giving you
+streaming requests and responses.
+
+## DEPRECATED
+
+**This gem is deprecated in favor of [Falcon]. Falcon is a web server that
+utilizes non-blocking IO to process requests and responses in a streaming
+fashion without tying up web workers. It's built on top of the [async
+ecosystem], which is a promising alternative to EventMachine.**
 
 ## Motivation
 
@@ -85,6 +93,8 @@ end
 
 The gem is available as open source under the terms of the [MIT License](http://opensource.org/licenses/MIT).
 
+[Falcon]: https://github.com/socketry/falcon
+[async ecosystem]: https://github.com/socketry
 [Goliath]: https://github.com/postrank-labs/goliath
 [EventMachine]: https://github.com/eventmachine/eventmachine
 [tus-ruby-server]: https://github.com/janko-m/tus-ruby-server
